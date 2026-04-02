@@ -1885,5 +1885,129 @@ async function thdSend(){var i=document.getElementById('thd-inp');var msg=(i&&i.
   });
 })();
 </script>
+  <script>
+/* ═══════════════════════════════════════════════════════════════════
+   MANISH SIR AI FIX — This script overrides the broken callAI()
+   Paste this block just before </body> in your original HTML file
+   ═══════════════════════════════════════════════════════════════════ */
+async function callAI(messages, context, lang) {
+  const ul = lang || currentLang;
+  const key = getStoredKey();
+
+  if (!key) {
+    const modal = document.getElementById('apiKeyModal');
+    if (modal) modal.style.display = 'flex';
+    return ul === 'hi'
+      ? 'Beta, pehle FREE Gemini API Key daalo! Neeche button dabao! 🔑'
+      : 'Please add your FREE Gemini API Key first! Click the bottom-left button! 🔑';
+  }
+
+  // Convert to Gemini format (uses "user" / "model" roles only)
+  const geminiMsgs = [];
+  for (const m of (messages || [])) {
+    const gemRole = (m.role === 'assistant') ? 'model' : 'user';
+    let parts = [];
+    if (Array.isArray(m.content)) {
+      for (const item of m.content) {
+        if (item.type === 'text' && (item.text || '').trim()) {
+          parts.push({ text: item.text.trim() });
+        } else if (item.type === 'image' && item.source) {
+          parts.push({ inline_data: { mime_type: item.source.media_type, data: item.source.data } });
+        }
+      }
+    } else {
+      const t = String(m.content || '').trim();
+      if (t) parts.push({ text: t });
+    }
+    if (!parts.length) continue;
+    // Merge consecutive same-role messages (Gemini requirement)
+    if (geminiMsgs.length && geminiMsgs[geminiMsgs.length - 1].role === gemRole) {
+      geminiMsgs[geminiMsgs.length - 1].parts.push(...parts);
+    } else {
+      geminiMsgs.push({ role: gemRole, parts });
+    }
+  }
+
+  // Must start with user turn
+  while (geminiMsgs.length && geminiMsgs[0].role !== 'user') geminiMsgs.shift();
+  if (!geminiMsgs.length) return 'No message to process.';
+
+  const requestBody = {
+    system_instruction: { parts: [{ text: buildSystemPrompt(ul, context || '') }] },
+    contents: geminiMsgs,
+    generationConfig: { maxOutputTokens: 800, temperature: 0.7 },
+    safetySettings: [
+      { category: 'HARM_CATEGORY_HARASSMENT',       threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+    ]
+  };
+
+  // Try FREE models in order
+  const MODELS = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'];
+
+  for (const model of MODELS) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!res.ok) {
+        let errMsg = '';
+        try { const j = await res.json(); errMsg = j?.error?.message || ''; } catch (_) {}
+        if (res.status === 400 && errMsg.includes('API_KEY_INVALID')) {
+          setStoredKey('');
+          return ul === 'hi' ? '❌ API Key galat! Sahi key daalo. 🔑' : '❌ Invalid API Key! Enter a valid Gemini key. 🔑';
+        }
+        if (res.status === 429) return ul === 'hi' ? '⏳ Rate limit. 1-2 min baad try karo.' : '⏳ Rate limit. Please wait 1-2 min.';
+        if (res.status === 404 || res.status === 400) continue;
+        if (model !== MODELS[MODELS.length - 1]) continue;
+        return `❌ Error ${res.status}${errMsg ? ': ' + errMsg.slice(0, 100) : ''}`;
+      }
+
+      const data = await res.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (text && text.trim()) return text.trim();
+
+      const fin = data?.candidates?.[0]?.finishReason;
+      if (fin === 'SAFETY') return ul === 'hi'
+        ? 'Yeh sawaal answer nahi kar sakta. Koi aur poochho! 🙏'
+        : 'Cannot answer this. Please ask something else! 🙏';
+
+      if (model !== MODELS[MODELS.length - 1]) continue;
+      return ul === 'hi' ? 'Response nahi aaya. Dobara try karo! 🔄' : 'No response. Try again! 🔄';
+
+    } catch (e) {
+      if (model === MODELS[MODELS.length - 1]) {
+        return ul === 'hi' ? '🌐 Internet check karo!' : '🌐 Check your internet connection!';
+      }
+    }
+  }
+  return ul === 'hi' ? 'Error. Dobara try karo.' : 'Error. Please try again.';
+}
+
+// Update modal text to show correct info
+(function fixModal() {
+  function update() {
+    const n = document.querySelector('.ak-note');
+    if (n) n.innerHTML = `🆓 <strong>100% FREE — no billing needed!</strong><br>
+1️⃣ <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--pink);font-weight:700">aistudio.google.com/apikey</a><br>
+2️⃣ "Create API Key" → Copy karo (AIzaSy...)<br>
+3️⃣ Yahan paste karo aur Save dabao 💾<br>
+🤖 Model: <strong>Gemini 2.0 Flash</strong> (1500 free req/day)`;
+    const p = document.querySelector('.ak-head p');
+    if (p) p.textContent = 'FREE Gemini 2.0 Flash se Manish Sir ko activate karo! 🎉';
+    updateKeyDot();
+  }
+  document.readyState === 'loading'
+    ? document.addEventListener('DOMContentLoaded', update)
+    : update();
+  console.log('%c✅ Manish Sir AI Fixed — Using Gemini 2.0 Flash (FREE tier)', 'color:#2e7d32;font-weight:bold;font-size:14px;background:#e8f5e9;padding:4px 8px;border-radius:4px');
+})();
+</script>
 </body>
 </html>
