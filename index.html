@@ -1062,7 +1062,7 @@ Teaching style:
 }
 
 // ═══ GEMINI KEY STORAGE ═══
-let _storedApiKey='AIzaSyBQFDaALExvlbQGbdi5IJu26LPFhezAyDY';
+let _storedApiKey='AIzaSyAgH8FZoeCPJ_mvng1MqNn3mSCnzIataos';
 function getStoredKey(){if(_storedApiKey)return _storedApiKey;try{_storedApiKey=localStorage.getItem('msir_g')||'';}catch(e){}return _storedApiKey;}
 function setStoredKey(k){_storedApiKey=k;try{localStorage.setItem('msir_g',k);}catch(e){}updateKeyDot();}
 function updateKeyDot(){var d=document.getElementById('ak-dot'),l=document.getElementById('ak-lbl'),h=!!getStoredKey();if(d)d.style.background=h?'#22c55e':'#c62828';if(l)l.textContent=h?'\u2713 Key':'Add Key';}
